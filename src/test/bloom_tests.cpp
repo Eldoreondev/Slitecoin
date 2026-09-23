@@ -83,8 +83,14 @@ BOOST_AUTO_TEST_CASE(bloom_create_insert_serialize_with_tweak)
 
 BOOST_AUTO_TEST_CASE(bloom_create_insert_key)
 {
-    std::string strSecret = std::string("6vyk9uiGUm8CCKbYue4PpoSbdWKZnjrxMQYJ1PaDGrQ4bLHTxQJ");
-    CKey key = DecodeSecret(strSecret);
+    const unsigned char rawKey[32] = {
+        0x44,0xb7,0x8d,0x45,0xad,0xc8,0x01,0xa6,
+        0x59,0x49,0x66,0x1d,0x5d,0xf1,0xc4,0xa4,
+        0x4f,0x53,0x2c,0xd4,0x22,0xbe,0x41,0x3a,
+        0x50,0x5d,0x77,0x67,0x84,0xdd,0xbe,0x25
+    };
+    CKey key;
+    key.Set(rawKey, rawKey + 32, true);
     CPubKey pubkey = key.GetPubKey();
     std::vector<unsigned char> vchPubKey(pubkey.begin(), pubkey.end());
 
@@ -96,7 +102,7 @@ BOOST_AUTO_TEST_CASE(bloom_create_insert_key)
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     stream << filter;
 
-    std::vector<unsigned char> vch = ParseHex("038fc16b080000000000000001");
+    std::vector<unsigned char> vch = ParseHex("030683e2080000000000000001");
     std::vector<char> expected(vch.size());
 
     for (unsigned int i = 0; i < vch.size(); i++)
