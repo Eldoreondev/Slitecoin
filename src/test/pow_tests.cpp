@@ -59,6 +59,27 @@ BOOST_AUTO_TEST_CASE(get_next_work_upper_limit_actual)
     BOOST_CHECK_EQUAL(CalculateNextWorkRequired(&pindexLast, nLastRetargetTime, chainParams->GetConsensus()), 0x1b054c60U);
 }
 
+BOOST_AUTO_TEST_CASE(stc_genesis_pow_nonce)
+{
+    SelectParams(CBaseChainParams::MAIN);
+    const auto chainParams = CreateChainParams(*m_node.args, CBaseChainParams::MAIN);
+    const auto consensus = chainParams->GetConsensus();
+
+    CBlock genesis = chainParams->GenesisBlock();
+    const uint32_t originalNonce = genesis.nNonce;
+
+    while (!CheckProofOfWork(genesis.GetPoWHash(), genesis.nBits, consensus)) {
+        ++genesis.nNonce;
+        BOOST_REQUIRE_MESSAGE(genesis.nNonce != 0, "STC genesis nonce search exhausted uint32 range");
+    }
+
+    std::cout << "STC VALID GENESIS NONCE: " << genesis.nNonce << std::endl;
+    std::cout << "STC VALID GENESIS POW: " << genesis.GetPoWHash().ToString() << std::endl;
+    std::cout << "STC GENESIS NONCE START: " << originalNonce << std::endl;
+
+    BOOST_CHECK(CheckProofOfWork(genesis.GetPoWHash(), genesis.nBits, consensus));
+}
+
 BOOST_AUTO_TEST_CASE(CheckProofOfWork_test_negative_target)
 {
     const auto consensus = CreateChainParams(*m_node.args, CBaseChainParams::MAIN)->GetConsensus();

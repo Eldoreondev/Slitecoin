@@ -1265,13 +1265,22 @@ bool ReadRawBlockFromDisk(std::vector<uint8_t>& block, const CBlockIndex* pindex
 
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
 {
+    // Height 0 is the unspendable genesis block and carries no spendable
+    // mining subsidy. Height 1 is the STC bootstrap/allocation block:
+    // 50 STC normal height-1 subsidy plus 50 STC replacing the otherwise
+    // unspendable genesis-era subsidy.
+    if (nHeight == 0)
+        return 0;
+    if (nHeight == consensusParams.nSTCAllocationHeight)
+        return 100 * COIN;
+
     int halvings = nHeight / consensusParams.nSubsidyHalvingInterval;
     // Force block reward to zero when right shift is undefined.
     if (halvings >= 64)
         return 0;
 
     CAmount nSubsidy = 50 * COIN;
-    // Subsidy is cut in half every 840,000 blocks.
+    // Subsidy is cut in half every nSubsidyHalvingInterval blocks.
     nSubsidy >>= halvings;
     return nSubsidy;
 }
@@ -2263,9 +2272,50 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
     int64_t nTime3 = GetTimeMicros(); nTimeConnect += nTime3 - nTime2;
     LogPrint(BCLog::BENCH, "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs (%.2fms/blk)]\n", (unsigned)block.vtx.size(), MILLI * (nTime3 - nTime2), MILLI * (nTime3 - nTime2) / block.vtx.size(), nInputs <= 1 ? 0 : MILLI * (nTime3 - nTime2) / (nInputs-1), nTimeConnect * MICRO, nTimeConnect * MILLI / nBlocksTotal);
 
-    CAmount blockReward = nFees + GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus());
-    if (block.vtx[0]->GetValueOut() > blockReward) {
-        LogPrintf("ERROR: ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)\n", block.vtx[0]->GetValueOut(), blockReward);
+    const Consensus::Params& consensusParams = chainparams.GetConsensus();
+    const CAmount minerReward = nFees + GetBlockSubsidy(pindex->nHeight, consensusParams);
+    CAmount allowedCoinbaseValue = minerReward;
+
+    if (pindex->nHeight == consensusParams.nSTCAllocationHeight) {
+        const auto& allocationOutputs = chainparams.STCAllocationOutputs();
+        const size_t allocationCount = allocationOutputs.size();
+
+        if (allocationCount != 6) {
+            return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-stc-allocation",
+                                  "invalid STC allocation configuration");
+        }
+
+        if (block.vtx[0]->vout.size() < 1 + allocationCount) {
+            return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-stc-allocation",
+                                  "missing STC allocation outputs");
+        }
+
+        for (size_t i = 0; i < allocationCount; ++i) {
+            if (block.vtx[0]->vout[i + 1] != allocationOutputs[i]) {
+                return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-stc-allocation",
+                                      "STC allocation output mismatch");
+            }
+        }
+
+        const int commitpos = GetWitnessCommitmentIndex(block);
+        const size_t expectedOutputs = 1 + allocationCount;
+
+        if (commitpos == NO_WITNESS_COMMITMENT) {
+            if (block.vtx[0]->vout.size() != expectedOutputs) {
+                return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-stc-allocation",
+                                      "unexpected coinbase outputs at STC allocation height");
+            }
+        } else if (commitpos != static_cast<int>(expectedOutputs) ||
+                   block.vtx[0]->vout.size() != expectedOutputs + 1) {
+            return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-stc-allocation",
+                                  "unexpected coinbase outputs around STC allocation");
+        }
+
+        allowedCoinbaseValue += Consensus::Params::STC_FIXED_ALLOCATION * COIN;
+    }
+
+    if (block.vtx[0]->GetValueOut() > allowedCoinbaseValue) {
+        LogPrintf("ERROR: ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)\n", block.vtx[0]->GetValueOut(), allowedCoinbaseValue);
         return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-amount");
     }
 

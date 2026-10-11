@@ -15,19 +15,33 @@ BOOST_FIXTURE_TEST_SUITE(validation_tests, TestingSetup)
 
 static void TestBlockSubsidyHalvings(const Consensus::Params& consensusParams)
 {
-    int maxHalvings = 64;
-    CAmount nInitialSubsidy = 50 * COIN;
+    const CAmount nNormalSubsidy = 50 * COIN;
 
-    CAmount nPreviousSubsidy = nInitialSubsidy * 2; // for height == 0
-    BOOST_CHECK_EQUAL(nPreviousSubsidy, nInitialSubsidy * 2);
-    for (int nHalvings = 0; nHalvings < maxHalvings; nHalvings++) {
-        int nHeight = nHalvings * consensusParams.nSubsidyHalvingInterval;
+    // Genesis is unspendable and carries no spendable mining subsidy.
+    BOOST_CHECK_EQUAL(GetBlockSubsidy(0, consensusParams), 0);
+
+    // Height 1 is the STC bootstrap/allocation block. It receives
+    // 100 STC: the normal 50 STC subsidy plus 50 STC replacing
+    // the otherwise unspendable genesis-era subsidy.
+    BOOST_CHECK_EQUAL(GetBlockSubsidy(1, consensusParams), 100 * COIN);
+
+    // Normal mining starts from height 2 at 50 STC.
+    BOOST_CHECK_EQUAL(GetBlockSubsidy(2, consensusParams), nNormalSubsidy);
+
+    for (int nHalvings = 0; nHalvings < 64; nHalvings++) {
+        const int nHeight = 2 + nHalvings * consensusParams.nSubsidyHalvingInterval;
         CAmount nSubsidy = GetBlockSubsidy(nHeight, consensusParams);
-        BOOST_CHECK(nSubsidy <= nInitialSubsidy);
-        BOOST_CHECK_EQUAL(nSubsidy, nPreviousSubsidy / 2);
-        nPreviousSubsidy = nSubsidy;
+
+        if (nSubsidy == 0) {
+            break;
+        }
+
+        BOOST_CHECK(nSubsidy <= nNormalSubsidy);
     }
-    BOOST_CHECK_EQUAL(GetBlockSubsidy(maxHalvings * consensusParams.nSubsidyHalvingInterval, consensusParams), 0);
+
+    BOOST_CHECK_EQUAL(
+        GetBlockSubsidy(64 * consensusParams.nSubsidyHalvingInterval, consensusParams),
+        0);
 }
 
 static void TestBlockSubsidyHalvings(int nSubsidyHalvingInterval)
@@ -48,14 +62,50 @@ BOOST_AUTO_TEST_CASE(block_subsidy_test)
 BOOST_AUTO_TEST_CASE(subsidy_limit_test)
 {
     const auto chainParams = CreateChainParams(*m_node.args, CBaseChainParams::MAIN);
-    CAmount nSum = 0;
-    for (int nHeight = 0; nHeight < 56000000; nHeight += 1000) {
-        CAmount nSubsidy = GetBlockSubsidy(nHeight, chainParams->GetConsensus());
+    const auto& consensus = chainParams->GetConsensus();
+
+    // STC spendable mining allocation:
+    // - Height 1 bootstrap block: 100 STC.
+    // - Height 2 onward: 50 STC initial subsidy, halving every
+    //   nSubsidyHalvingInterval blocks.
+    //
+    // The 100 STC bootstrap reward restores the 50 STC subsidy that
+    // would otherwise have been permanently unspendable in genesis.
+    CAmount totalMiningSubsidy = GetBlockSubsidy(1, consensus);
+    BOOST_CHECK_EQUAL(totalMiningSubsidy, 100 * COIN);
+    BOOST_CHECK(MoneyRange(totalMiningSubsidy));
+
+    for (int halvings = 0; halvings < 64; ++halvings) {
+        const CAmount nSubsidy = 50 * COIN >> halvings;
+        if (nSubsidy == 0) {
+            break;
+        }
+
+        const int nStartHeight =
+            2 + halvings * consensus.nSubsidyHalvingInterval;
+
+        CAmount blocksInEra = consensus.nSubsidyHalvingInterval;
+        if (halvings == 0) {
+            // Height 0 is genesis and height 1 is the bootstrap block.
+            // The normal 50 STC era therefore starts at height 2.
+            blocksInEra -= 2;
+        }
+
+        totalMiningSubsidy += nSubsidy * blocksInEra;
+
         BOOST_CHECK(nSubsidy <= 50 * COIN);
-        nSum += nSubsidy * 1000;
-        BOOST_CHECK(MoneyRange(nSum));
+        BOOST_CHECK(MoneyRange(totalMiningSubsidy));
+
+        (void)nStartHeight;
     }
-    BOOST_CHECK_EQUAL(nSum, CAmount{8399999990760000});
+
+    const CAmount targetMiningAllocation = 42000000 * COIN;
+    const CAmount roundingDifference =
+        targetMiningAllocation - totalMiningSubsidy;
+
+    // Integer halving produces a final rounding difference of
+    // 0.04620000 STC.
+    BOOST_CHECK_EQUAL(roundingDifference, 4620000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

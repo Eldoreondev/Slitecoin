@@ -1,13 +1,13 @@
-<!-- This issue tracker is only for technical issues related to Litecoin Core.
+<!-- This issue tracker is only for technical issues related to SLiteCoin Core.
 
-General litecoin questions and/or support requests and are best directed to the [litecointalk.io forums](https://litecointalk.io/).
+General SLiteCoin questions and/or support requests should be directed to the official SLiteCoin community support channels.
 
-For reporting security issues, please contact the Litecoin developers on the #litecoin-dev Freenode IRC channel or alternatively you can email us at contact@litecoin.org.
+For reporting security issues, please use the official SLiteCoin security contact channel.
 
 If the node is "stuck" during sync or giving "block checksum mismatch" errors, please ensure your hardware is stable by running memtest and observe CPU temperature with a load-test tool such as linpack before creating an issue!
 
 Any report, issue or feature request related to the GUI should be reported at
-https://github.com/bitcoin-core/gui/issues/
+the official SLiteCoin GUI issue tracker
 -->
 
 <!-- Describe the issue -->
@@ -17,7 +17,7 @@ https://github.com/bitcoin-core/gui/issues/
 
 <!--- How reliably can you reproduce the issue, what are the steps to do so? -->
 
-<!-- What version of Litecoin Core are you using, where did you get it (website, self-compiled, etc)? -->
+<!-- What version of SLiteCoin Core are you using, where did you get it (website, self-compiled, etc)? -->
 
 <!-- What type of machine are you observing the error on (OS/CPU and disk type)? -->
 

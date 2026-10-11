@@ -57,6 +57,45 @@ struct BIP9Deployment {
 struct Params {
     uint256 hashGenesisBlock;
     int nSubsidyHalvingInterval;
+
+    /** Block height at which the fixed STC allocation is issued. */
+    int nSTCAllocationHeight{1};
+
+    // STC block subsidy allocation percentages.
+    // Total must remain 100%.
+    int nMiningAllocationPercent{50};
+    int nEcosystemAllocationPercent{12};
+    int nCommunityRewardsAllocationPercent{8};
+    int nPublicSaleAllocationPercent{15};
+    int nLiquidityAllocationPercent{5};
+    int nTreasuryAllocationPercent{5};
+    int nFounderTeamAllocationPercent{5};
+
+    // STC fixed allocation pool.
+    // Mining emission is governed separately by GetBlockSubsidy().
+    // The remaining 50% of the 84,000,000 STC maximum supply is
+    // reserved for the fixed allocations below.
+    static constexpr int64_t STC_TOTAL_SUPPLY = 84000000;
+    static constexpr int64_t STC_MINING_ALLOCATION = 42000000;
+    static constexpr int64_t STC_ECOSYSTEM_ALLOCATION = 10080000;
+    static constexpr int64_t STC_COMMUNITY_REWARDS_ALLOCATION = 6720000;
+    static constexpr int64_t STC_PUBLIC_SALE_ALLOCATION = 12600000;
+    static constexpr int64_t STC_LIQUIDITY_ALLOCATION = 4200000;
+    static constexpr int64_t STC_TREASURY_ALLOCATION = 4200000;
+    static constexpr int64_t STC_FOUNDER_TEAM_ALLOCATION = 4200000;
+
+    static constexpr int64_t STC_FIXED_ALLOCATION =
+        STC_ECOSYSTEM_ALLOCATION +
+        STC_COMMUNITY_REWARDS_ALLOCATION +
+        STC_PUBLIC_SALE_ALLOCATION +
+        STC_LIQUIDITY_ALLOCATION +
+        STC_TREASURY_ALLOCATION +
+        STC_FOUNDER_TEAM_ALLOCATION;
+
+    static_assert(
+        STC_MINING_ALLOCATION + STC_FIXED_ALLOCATION == STC_TOTAL_SUPPLY,
+        "STC allocation must equal total supply"
+    );
     /** Block height at which BIP16 becomes active */
     int BIP16Height;
     /** Block height and hash at which BIP34 becomes active */

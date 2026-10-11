@@ -91,6 +91,10 @@ public:
     const std::string& Bech32HRP() const { return bech32_hrp; }
     const std::string& MWEB_HRP() const { return mweb_hrp; }
     const std::vector<uint8_t>& FixedSeeds() const { return vFixedSeeds; }
+
+    /** Spendable STC fixed-allocation outputs issued at the allocation height. */
+    const std::vector<CTxOut>& STCAllocationOutputs() const { return stcAllocationOutputs; }
+
     const CCheckpointData& Checkpoints() const { return checkpointData; }
     const ChainTxData& TxData() const { return chainTxData; }
 protected:
@@ -108,6 +112,12 @@ protected:
     std::string mweb_hrp;
     std::string strNetworkID;
     CBlock genesis;
+
+    // Network-specific spendable outputs for the fixed STC allocation.
+    // Amounts are governed by Consensus::Params; destinations are
+    // chain-parameter data so mainnet/testnet/regtest can differ.
+    std::vector<CTxOut> stcAllocationOutputs;
+
     std::vector<uint8_t> vFixedSeeds;
     bool fDefaultConsistencyChecks;
     bool fRequireStandard;

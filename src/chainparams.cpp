@@ -8,6 +8,8 @@
 #include <chainparamsseeds.h>
 #include <consensus/merkle.h>
 #include <hash.h> // for signet block challenge hash
+#include <key_io.h>
+#include <script/standard.h>
 #include <tinyformat.h>
 #include <util/system.h>
 #include <util/strencodings.h>
@@ -18,44 +20,40 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 
-static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesisOutputScript, uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
+static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
 {
+    const char* pszTimestamp = "SLiteCoin (STC) Genesis Block - Decentralized Future";
+
+    const CScript genesisOutputScript =
+        CScript() << ParseHex("040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9") << OP_CHECKSIG;
+
     CMutableTransaction txNew;
     txNew.nVersion = 1;
     txNew.vin.resize(1);
+    txNew.vin[0].scriptSig =
+        CScript() << 486604799 << CScriptNum(4)
+                  << std::vector<unsigned char>(
+                         (const unsigned char*)pszTimestamp,
+                         (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
+
+    // Keep one structurally valid, zero-value genesis output.
+    // The fixed STC allocation is issued at the dedicated allocation
+    // block height instead, so those outputs are spendable and accounted
+    // for by normal chainstate rules.
     txNew.vout.resize(1);
-    txNew.vin[0].scriptSig = CScript() << 486604799 << CScriptNum(4) << std::vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
     txNew.vout[0].nValue = genesisReward;
     txNew.vout[0].scriptPubKey = genesisOutputScript;
 
     CBlock genesis;
-    genesis.nTime    = nTime;
-    genesis.nBits    = nBits;
-    genesis.nNonce   = nNonce;
+    genesis.nTime = nTime;
+    genesis.nBits = nBits;
+    genesis.nNonce = nNonce;
     genesis.nVersion = nVersion;
     genesis.vtx.push_back(MakeTransactionRef(std::move(txNew)));
     genesis.hashPrevBlock.SetNull();
     genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
 
     return genesis;
-}
-
-/**
- * Build the genesis block. Note that the output of its generation
- * transaction cannot be spent since it did not originally exist in the
- * database.
- *
- * CBlock(hash=000000000019d6, ver=1, hashPrevBlock=00000000000000, hashMerkleRoot=4a5e1e, nTime=1231006505, nBits=1d00ffff, nNonce=2083236893, vtx=1)
- *   CTransaction(hash=4a5e1e, ver=1, vin.size=1, vout.size=1, nLockTime=0)
- *     CTxIn(COutPoint(000000, -1), coinbase 04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73)
- *     CTxOut(nValue=50.00000000, scriptPubKey=0x5F1DF16B2B704C8A578D0B)
- *   vMerkleTree: 4a5e1e
- */
-static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
-{
-    const char* pszTimestamp = "SLiteCoin (STC) Genesis Block - Decentralized Future";
-    const CScript genesisOutputScript = CScript() << ParseHex("040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9") << OP_CHECKSIG;
-    return CreateGenesisBlock(pszTimestamp, genesisOutputScript, nTime, nNonce, nBits, nVersion, genesisReward);
 }
 
 static std::vector<uint256> GetFrozenMWEBOutputIDs()
@@ -74,7 +72,7 @@ public:
         strNetworkID = CBaseChainParams::MAIN;
         consensus.signet_blocks = false;
         consensus.signet_challenge.clear();
-        consensus.nSubsidyHalvingInterval = 840000;
+        consensus.nSubsidyHalvingInterval = 420000;
         consensus.BIP16Height = 0; // 87afb798a3ad9378fcd56123c81fb31cfd9a8df4719b9774d71730c16315a092 - October 1, 2012
         consensus.BIP34Height = 100000000;
         consensus.BIP34Hash = uint256();
@@ -126,18 +124,20 @@ public:
 
         genesis = CreateGenesisBlock(
             1789689600,
-            647403,
+            2255341,
             0x1e0ffff0,
             1,
-            50 * COIN
+            0
         );
 
         std::cout << "PoW Hash: " << genesis.GetPoWHash().ToString() << std::endl;
         std::cout << "nBits: " << std::hex << genesis.nBits << std::dec << std::endl;
 
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0xc990e097a1d775cd2df1281444618e49390d6e7923cd038ef21ac4819a250412"));
-       // assert(genesis.hashMerkleRoot == uint256S("0xc2da8d8ddf41fa9ab01cec0f0acdd65debb2532f5f4f9c0d1de41064a52731c0"));
+        std::cout << "STC NEW GENESIS HASH: "
+                  << consensus.hashGenesisBlock.ToString() << std::endl;
+        std::cout << "STC NEW GENESIS MERKLE: "
+                  << genesis.hashMerkleRoot.ToString() << std::endl;
 
         // Note that of those which support the service bits prefix, most only support a subset of
         // possible options.
@@ -154,6 +154,27 @@ public:
 
         bech32_hrp = "stc";
         mweb_hrp = "stcmweb";
+
+        // Spendable STC fixed allocation issued at nSTCAllocationHeight.
+        // Destinations are wallet-controlled mainnet addresses.
+        const auto AddSTCAllocation = [&](const char* address, int64_t amount) {
+            if (!IsValidDestinationString(address, *this)) {
+                throw std::runtime_error(strprintf("Invalid STC allocation address: %s", address));
+            }
+            const CTxDestination destination = DecodeDestination(address, *this);
+            stcAllocationOutputs.emplace_back(amount * COIN, GetScriptForDestination(destination));
+        };
+
+        AddSTCAllocation("stc1qyxv448papcxzhwvkfuvat8z3dxr3mlgeus3a74", Consensus::Params::STC_ECOSYSTEM_ALLOCATION);
+        AddSTCAllocation("stc1q8rm37vum928j003x7rx0hhvkw65ax3kxqpnw2p", Consensus::Params::STC_COMMUNITY_REWARDS_ALLOCATION);
+        AddSTCAllocation("stc1qf3etv4sqqx6f5d2j4gwm7xejsp7wxvl7xqqgxx", Consensus::Params::STC_PUBLIC_SALE_ALLOCATION);
+        AddSTCAllocation("stc1q2lz3snjdv83cx5t8c2de38tsy0e6uettavje57", Consensus::Params::STC_LIQUIDITY_ALLOCATION);
+        AddSTCAllocation("stc1qnyvh8vensjnjgx8v62sr8a6tv4cfuvj7rnjltz", Consensus::Params::STC_TREASURY_ALLOCATION);
+        AddSTCAllocation("stc1qeznp0l8z6zke4cuky3resm6sd6trqj7v0whjjg", Consensus::Params::STC_FOUNDER_TEAM_ALLOCATION);
+
+        // STC mainnet DNS seeds
+        vSeeds.emplace_back("seed1.slitecoin.com");
+        vSeeds.emplace_back("seed2.slitecoin.com");
 
         vFixedSeeds.clear();
 
@@ -184,7 +205,8 @@ public:
         strNetworkID = CBaseChainParams::TESTNET;
         consensus.signet_blocks = false;
         consensus.signet_challenge.clear();
-        consensus.nSubsidyHalvingInterval = 840000;
+        consensus.nSubsidyHalvingInterval = 420000;
+        consensus.nSTCAllocationHeight = -1; // Fixed STC allocation is mainnet-only.
         consensus.BIP16Height = 0; // always enforce P2SH BIP16 on testnet
         consensus.BIP34Height = 76;
         consensus.BIP34Hash = uint256S("8075c771ed8b495ffd943980a95f702ab34fce3c8c54e379548bda33cc8c0573");
@@ -242,8 +264,8 @@ public:
         base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
 
-        bech32_hrp = "tltc";
-        mweb_hrp = "tmweb";
+        bech32_hrp = "tstc";
+        mweb_hrp = "tstcmweb";
 
         vFixedSeeds.clear();
 
@@ -276,6 +298,7 @@ public:
         consensus.signet_blocks = false;
         consensus.signet_challenge.clear();
         consensus.nSubsidyHalvingInterval = 150;
+        consensus.nSTCAllocationHeight = -1; // Fixed STC allocation is mainnet-only.
         consensus.BIP16Height = 0;
         consensus.BIP34Height = 500; // BIP34 activated on regtest (Used in functional tests)
         consensus.BIP34Hash = uint256();
@@ -350,8 +373,8 @@ public:
         base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
 
-        bech32_hrp = "rltc";
-        mweb_hrp = "tmweb";
+        bech32_hrp = "rstc";
+        mweb_hrp = "rstcmweb";
     }
 
     /**

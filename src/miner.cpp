@@ -176,6 +176,15 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     coinbaseTx.vout[0].scriptPubKey = scriptPubKeyIn;
     coinbaseTx.vout[0].nValue = nFees + GetBlockSubsidy(nHeight, chainparams.GetConsensus());
     coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
+
+    // Issue the fixed, spendable STC allocation exactly once at the
+    // configured allocation height. These outputs are consensus-defined
+    // chain-parameter outputs and are appended before the witness commitment.
+    if (nHeight == chainparams.GetConsensus().nSTCAllocationHeight) {
+        for (const CTxOut& allocationOut : chainparams.STCAllocationOutputs()) {
+            coinbaseTx.vout.push_back(allocationOut);
+        }
+    }
     pblock->vtx[0] = MakeTransactionRef(std::move(coinbaseTx));
     pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus());
     pblocktemplate->vTxFees[0] = -nFees;

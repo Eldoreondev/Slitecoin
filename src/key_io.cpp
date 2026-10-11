@@ -79,7 +79,7 @@ public:
     std::string operator()(const CNoDestination& no) const { return {}; }
 };
 
-CTxDestination DecodeDestination(const std::string& str, const CChainParams& params)
+CTxDestination DecodeDestinationInternal(const std::string& str, const CChainParams& params)
 {
     std::vector<unsigned char> data;
     uint160 hash;
@@ -164,6 +164,11 @@ CTxDestination DecodeDestination(const std::string& str, const CChainParams& par
     return CNoDestination();
 }
 } // namespace
+
+CTxDestination DecodeDestination(const std::string& str, const CChainParams& params)
+{
+    return DecodeDestinationInternal(str, params);
+}
 
 CKey DecodeSecret(const std::string& str)
 {
@@ -250,12 +255,12 @@ std::string EncodeDestination(const CTxDestination& dest)
 
 CTxDestination DecodeDestination(const std::string& str)
 {
-    return DecodeDestination(str, Params());
+    return DecodeDestinationInternal(str, Params());
 }
 
 bool IsValidDestinationString(const std::string& str, const CChainParams& params)
 {
-    return IsValidDestination(DecodeDestination(str, params));
+    return IsValidDestination(DecodeDestinationInternal(str, params));
 }
 
 bool IsValidDestinationString(const std::string& str)
